@@ -150,4 +150,7 @@ if __name__ == "__main__":
     for law_entity_one in law_entity:
         law_query_one = law_entity_one[0].strip("\n")
         law_query_two = law_entity_one[1].strip("\n")
-        doSpider(keyword=law_query_one + " " + law_query_two, sortBy='focus')
+        fileName = '{}.csv'.format(law_query_one + " " + law_query_two)
+
+        if not os.path.exists(os.path.join("../baidu_新能源企业_news_double", fileName)):
+            doSpider(keyword=law_query_one + " " + law_query_two, sortBy='focus')

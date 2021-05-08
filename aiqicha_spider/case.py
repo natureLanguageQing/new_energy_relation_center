@@ -4,7 +4,7 @@ from multiprocessing import Pool
 
 import requests
 from fake_useragent import UserAgent
-
+import pandas as pd
 ua = UserAgent()
 
 
