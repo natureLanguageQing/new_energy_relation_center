@@ -10,7 +10,7 @@ knowledge_path = "../company_knowledge_base/company_detail_company"
 # 新闻地址
 news_path = "../chinese_news_double"
 # 二级相关企业pid保存地址
-second_pid_path = "second_pid.csv"
+second_pid_path = "../company_data_txt/company_detail_company_second_pid.csv"
 
 news_path_list = os.listdir(news_path)
 knowledge_path_list = os.listdir(knowledge_path)
