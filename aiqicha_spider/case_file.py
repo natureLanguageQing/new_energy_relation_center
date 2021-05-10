@@ -31,7 +31,7 @@ if __name__ == "__main__":
     import os
 
     ps = Pool(2)
-    base_path = "../company_data_2021年5月8日"
+    base_path = "../企业爱企查导出数据/company_data_2021年5月8日"
     export_path = "company_detail"
     if not os.path.exists(export_path):
         os.mkdir(export_path)
