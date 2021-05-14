@@ -62,7 +62,7 @@ def dealHtml(html):
             'time': dateTime,
             'summary': summary
         })
-    with open(os.path.join("../baidu_新能源企业_news_double", fileName), 'a+', encoding='utf-8-sig', newline='') as f:
+    with open(os.path.join("../graph_新能源企业_news_relation", fileName), 'a+', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f)
         for row in saveData:
             writer.writerow([row['title'], row['source'], row['time'], row['summary']])
@@ -91,27 +91,29 @@ params = {
 }
 
 
-def doSpider(keyword, sortBy='focus'):
-    '''
+def doSpider(keyword, sortBy='focus', relation="", file_path=""):
+    """
     :param keyword: 搜索关键词
     :param sortBy: 排序规则，可选：focus(按焦点排序），time(按时间排序），默认 focus
     :return:
-    '''
+    """
     global fileName
-    fileName = '{}.csv'.format(keyword)
-    if not os.path.exists(os.path.join("../baidu_新能源企业_news_double")):
-        os.mkdir(os.path.join("../baidu_新能源企业_news_double"))
+    fileName = '{}.csv'.format(keyword + " " + relation)
+    if not os.path.exists(os.path.join(file_path)):
+        os.mkdir(os.path.join(file_path))
     if not os.path.exists(fileName):
-        with open(os.path.join("../baidu_新能源企业_news_double", fileName), 'w+', encoding='utf-8-sig', newline='') as f:
+        with open(os.path.join(file_path, fileName), 'w+', encoding='utf-8-sig', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['title', 'source', 'time', 'summary'])
 
     params['wd'] = keyword
     if sortBy == 'time':
         params['rtt'] = 4
-
-    response = requests.get(url=url, params=params, headers=headers)
-
+    try:
+        response = requests.get(url=url, params=params, headers=headers)
+    except ValueError as ve:
+        print(ve)
+        return
     html = etree.HTML(response.text)
 
     dealHtml(html)
@@ -125,8 +127,8 @@ def doSpider(keyword, sortBy='focus'):
     except:
         return
     pageNum = total // 10
-    if pageNum > 100:
-        pageNum = 100
+    if pageNum > 1:
+        pageNum = 1
     for page in range(1, pageNum):
         print('第 {} 页\n\n'.format(page))
         headers['Referer'] = response.url
@@ -146,11 +148,15 @@ if __name__ == "__main__":
 
     import pandas as pd
 
-    law_entity = pd.read_excel("../company_data/【爱企查】-新能源企业.xls").values.tolist()
+    law_entity = pd.read_csv("../company_base_triple/company_data_新能源企业_triple.csv").drop_duplicates().values.tolist()
     for law_entity_one in law_entity:
-        law_query_one = law_entity_one[0].strip("\n")
-        law_query_two = law_entity_one[1].strip("\n")
-        fileName = '{}.csv'.format(law_query_one + " " + law_query_two)
+        if isinstance(law_entity_one, list) and isinstance(law_entity_one[0], str):
+            law_query_one = law_entity_one[0].strip("\n")
+            law_query_two = law_entity_one[2].strip("\n")
+            relation = law_entity_one[1]
+            fileName = '{}.csv'.format(law_query_one + " " + law_query_two + " " + relation)
 
-        if not os.path.exists(os.path.join("../baidu_新能源企业_news_double", fileName)):
-            doSpider(keyword=law_query_one + " " + law_query_two, sortBy='focus')
+            if not os.path.exists(os.path.join("../graph_新能源企业_news_relation", fileName)):
+                doSpider(keyword=law_query_one + " " + law_query_two, relation=relation,
+                         sortBy='focus',
+                         file_path="../graph_新能源企业_news_relation")
