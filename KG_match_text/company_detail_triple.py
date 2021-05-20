@@ -58,6 +58,6 @@ for knowledge_path_one in knowledge_path_list:
                                                                   "shareholdersData_personLogo"]:
                             second_value.strip("\n")
                             triple_writer.writerow([company_ent_name, total_key + "_" + second_title, second_value])
-
+print(len(second_pid_path))
 pd.read_csv(second_pid_path).drop_duplicates().to_csv(second_pid_path, index=False)
-pd.read_csv(second_pid_path).drop_duplicates().to_excel("../company_base_triple/news_data_triple.xls", index=False)
+pd.read_csv(second_pid_path).drop_duplicates().to_excel("../company_base_triple/news_data_triple.xlsx", index=False)

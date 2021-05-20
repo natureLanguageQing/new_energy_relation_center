@@ -29,12 +29,6 @@ checkpoint_path = 'D:\miaoCloudCompany\ophthalmic_guidance\pretrain_models\chine
 dict_path = 'D:\miaoCloudCompany\ophthalmic_guidance\pretrain_models\chinese_L-12_H-768_A-12/vocab.txt'
 
 
-# {
-#     "text": "体 格 检 查T:37.0°CP:75次无分R:18次无分Bp:110/75mmHgH:cmW:kgSA:m2体能状况评分(KPS)一般情况:发育:正常 营养:良好 面容:无病容 神志:清楚 体位:自主皮肤粘膜:色泽:正常 弹性:正常 水肿:无头部 :头颅、五官:无异常颈部 : 抵抗感无 气管:居中 颈静脉:正常 甲状腺:正常 胸部 : 乳房:正常对称 余见专科情况腹部 : 视诊: 外形:正常,其他异常:无 触诊:柔软,压痛:无,反跳痛:无,腹部包块:无,肝脏未触及,脾脏未触及。",
-#     "entity": "色泽",
-#     "relathon": "9",
-#     "end_entity": "正常"
-# }
 def load_data(filename):
     D = []
     labels = list()
@@ -44,7 +38,7 @@ def load_data(filename):
             'text': l[3],
             'spo_list': [(l[0], l[1], l[2])]
         })
-        labels.append(l["relation"])
+        labels.append(l[1])
     return D, labels
 
 
@@ -75,6 +69,10 @@ def search(pattern, sequence):
 class data_generator(DataGenerator):
     """数据生成器
     """
+    def for_fit(self):
+        while True:
+            for d in self.__iter__(True):
+                yield d
 
     def __iter__(self, random=False):
         batch_token_ids, batch_segment_ids = [], []
@@ -285,6 +283,7 @@ def evaluate(data):
     """评估函数，计算f1、precision、recall
     """
     X, Y, Z = 1e-10, 1e-10, 1e-10
+    f1, precision, recall = 0, 0, 0
     f = open('dev_pred.json', 'w', encoding='utf-8')
     pbar = tqdm()
     for d in data:
@@ -318,11 +317,12 @@ class Evaluator(keras.callbacks.Callback):
     """
 
     def __init__(self):
+        super().__init__()
         self.best_val_f1 = 0.
 
     def on_epoch_end(self, epoch, logs=None):
         optimizer.apply_ema_weights()
-        f1, precision, recall = evaluate(train_data)
+        f1, precision, recall = evaluate(train_data[:1000])
         if f1 >= self.best_val_f1:
             self.best_val_f1 = f1
             train_model.save_weights('relation_extraction.weights')

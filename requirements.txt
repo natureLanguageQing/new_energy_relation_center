@@ -5,3 +5,4 @@ six~=1.15.0
 tqdm~=4.48.2
 tensorflow~=1.14.0
 pandas~=1.0.5
+lxml~=4.6.3
