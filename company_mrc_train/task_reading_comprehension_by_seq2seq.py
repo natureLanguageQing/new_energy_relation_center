@@ -43,7 +43,7 @@ def predict_to_file(data, filename, topk=1):
     """
     with open(filename, 'w', encoding='utf-8') as f:
         for d in tqdm(iter(data), desc=u'正在预测(共%s条样本)' % len(data)):
-            q_text = d['spo)list'][0] + d['spo_list'][1]
+            q_text = d['spo_list'][0] + d['spo_list'][1]
             a_text = d['spo_list'][2]
 
             p_texts = [d['text']]
