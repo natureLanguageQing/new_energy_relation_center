@@ -7,12 +7,13 @@
 import re
 
 from keras.models import Model
+from tqdm import tqdm
 
 from bert4keras.backend import keras, K
 from bert4keras.layers import Loss
 from bert4keras.models import build_transformer_model
 from bert4keras.optimizers import Adam
-from bert4keras.snippets import DataGenerator, AutoRegressiveDecoder
+from bert4keras.snippets import AutoRegressiveDecoder, DataGenerator
 from bert4keras.snippets import sequence_padding
 from bert4keras.tokenizers import Tokenizer, load_vocab
 import json
@@ -20,7 +21,7 @@ import os
 
 import numpy as np
 
-from data_helper import load_data
+from company_mrc_train.data_helper import load_data
 
 event_extraction_train_data = load_data('../enterprise_event_extraction/event_extraction.csv')
 # 保存一个随机序（供划分valid用）
@@ -35,7 +36,26 @@ else:
 train_data = [event_extraction_train_data[j] for i, j in enumerate(random_order) if i % 3 != 0]
 valid_data = [event_extraction_train_data[j] for i, j in enumerate(random_order) if i % 3 == 0]
 from company_mrc_train.config import dict_path, config_path, checkpoint_path
-from data_helper import predict_to_file
+
+
+def predict_to_file(data, filename, topk=1):
+    """将预测结果输出到文件，方便评估
+    """
+    with open(filename, 'w', encoding='utf-8') as f:
+        for d in tqdm(iter(data), desc=u'正在预测(共%s条样本)' % len(data)):
+            q_text = d['spo)list'][0] + d['spo_list'][1]
+            a_text = d['spo_list'][2]
+
+            p_texts = [d['text']]
+            p_text = d['text']
+            a = reader.answer(q_text, p_texts, topk)
+            if a:
+                s = u'%s\t%s\t%s\t%s\n' % (p_text, q_text, a_text, a)
+            else:
+                s = u'%s\t\t%s\t%s\n' % (p_text, q_text, a_text)
+            f.write(s)
+            f.flush()
+
 
 max_p_len = 256
 max_q_len = 64
@@ -43,8 +63,6 @@ max_a_len = 32
 max_qa_len = max_q_len + max_a_len
 batch_size = 32
 epochs = 8
-
-
 
 # 加载并精简词表，建立分词器
 token_dict, keep_tokens = load_vocab(
@@ -54,52 +72,41 @@ token_dict, keep_tokens = load_vocab(
 )
 tokenizer = Tokenizer(token_dict, do_lower_case=True)
 
+
 class data_generator(DataGenerator):
     """数据生成器
     """
 
-    def for_fit(self):
-        while True:
-            for d in self.__iter__(True):
-                yield d
-
     def __iter__(self, random=False):
-        """单条样本格式为
-        输入：[CLS][MASK][MASK][SEP]问题[SEP]篇章[SEP]
-        输出：答案
+        """单条样本格式：[CLS]篇章[SEP]问题[SEP]答案[SEP]
         """
-        batch_token_ids, batch_segment_ids, batch_a_token_ids = [], [], []
+        batch_token_ids, batch_segment_ids = [], []
         for is_end, D in self.sample(random):
             question = D['spo_list'][0] + " " + D['spo_list'][1]
             passage = D['text']
             passage = re.sub(u' |、|；|，', ',', passage)
-            final_answer = [D['spo_list'][2]]
-            a_token_ids, _ = tokenizer.encode(
-                final_answer, maxlen=max_a_len + 1
+            final_answer = D['spo_list'][2]
+            qa_token_ids, qa_segment_ids = tokenizer.encode(
+                question, final_answer, maxlen=max_qa_len + 1
             )
-            q_token_ids, _ = tokenizer.encode(question, maxlen=max_q_len + 1)
-            p_token_ids, _ = tokenizer.encode(passage, maxlen=max_p_len + 1)
-            token_ids = [tokenizer._token_start_id]
-            token_ids += ([tokenizer._token_mask_id] * max_a_len)
-            token_ids += [tokenizer._token_end_id]
-            token_ids += (q_token_ids[1:] + p_token_ids[1:])
-            segment_ids = [0] * len(token_ids)
+            p_token_ids, p_segment_ids = tokenizer.encode(
+                passage, maxlen=max_p_len
+            )
+            token_ids = p_token_ids + qa_token_ids[1:]
+            segment_ids = p_segment_ids + qa_segment_ids[1:]
             batch_token_ids.append(token_ids)
             batch_segment_ids.append(segment_ids)
-            batch_a_token_ids.append(a_token_ids[1:])
             if len(batch_token_ids) == self.batch_size or is_end:
                 batch_token_ids = sequence_padding(batch_token_ids)
                 batch_segment_ids = sequence_padding(batch_segment_ids)
-                batch_a_token_ids = sequence_padding(
-                    batch_a_token_ids, max_a_len
-                )
-                yield [batch_token_ids, batch_segment_ids], batch_a_token_ids
-                batch_token_ids, batch_segment_ids, batch_a_token_ids = [], [], []
+                yield [batch_token_ids, batch_segment_ids], None
+                batch_token_ids, batch_segment_ids = [], []
 
 
 class CrossEntropy(Loss):
     """交叉熵作为loss，并mask掉输入部分
     """
+
     def compute_loss(self, inputs, mask=None):
         y_true, y_mask, y_pred = inputs
         y_true = y_true[:, 1:]  # 目标token_ids
@@ -130,6 +137,7 @@ class ReadingComprehension(AutoRegressiveDecoder):
     如果没答案，则返回空字符串。
     mode是extractive时，按照抽取式执行，即答案必须是原篇章的一个片段。
     """
+
     def __init__(self, mode='extractive', **kwargs):
         super(ReadingComprehension, self).__init__(**kwargs)
         self.mode = mode
@@ -196,7 +204,7 @@ class ReadingComprehension(AutoRegressiveDecoder):
                 available_idxs = list(available_idxs)
                 new_probas[:, i, available_idxs] = probas[:, i, available_idxs]
             probas = new_probas
-        return (probas**2).sum(0) / (probas.sum(0) + 1), states + 1  # 某种平均投票方式
+        return (probas ** 2).sum(0) / (probas.sum(0) + 1), states + 1  # 某种平均投票方式
 
     def answer(self, question, passages, topk=1):
         token_ids = []
@@ -219,12 +227,10 @@ reader = ReadingComprehension(
 )
 
 
-
-
-
 class Evaluator(keras.callbacks.Callback):
     """评估与保存
     """
+
     def __init__(self):
         self.lowest = 1e10
 
